@@ -1,0 +1,1 @@
+You are a test. Reply with: WORKFLOWS_ENABLED=$CLAUDE_CODE_WORKFLOWS
