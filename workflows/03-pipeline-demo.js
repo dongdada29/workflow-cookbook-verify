@@ -14,6 +14,8 @@ export const meta = {
 }
 
 const items = ['off-by-one', 'null-dereference', 'race-condition']
+
+phase('Find')
 const out = await pipeline(
   items,
   (kind) =>
@@ -21,10 +23,14 @@ const out = await pipeline(
       label: `find:${kind}`, phase: 'Find',
       schema: { type: 'object', properties: { example: { type: 'string' } }, required: ['example'] },
     }),
-  (found, kind) =>
-    agent(`Is this genuinely a ${kind} bug? Example: "${found.example}". Reply boolean + short reason.`, {
+  (found, kind) => {
+    phase('Verify')
+    return agent(`Is this genuinely a ${kind} bug? Example: "${found.example}". Reply boolean + short reason.`, {
       label: `verify:${kind}`, phase: 'Verify',
       schema: { type: 'object', properties: { real: { type: 'boolean' }, reason: { type: 'string' } }, required: ['real', 'reason'] },
     }).then((v) => ({ kind, ...found, ...v }))
+  }
 )
-return out.filter(Boolean)
+const valid = out.filter(Boolean)
+log(`pipeline completed: ${valid.length}/${items.length} verified`)
+return valid

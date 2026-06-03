@@ -1,9 +1,11 @@
 /**
  * 07-sharded-review.js
  * 第 10 章 · 分片代码审查
- * 
+ *
  * 核心模式：pipeline 让每片独立流过 Review→Verify，Synthesize 前才用屏障
  */
+
+import { SHARDED_FINDING_SCHEMA, SIMPLE_VERDICT_SCHEMA } from './schemas/index.js'
 
 export const meta = {
   name: 'sharded-review',
@@ -16,25 +18,10 @@ export const meta = {
   ],
 }
 
-// 发现 schema
-const FINDING_SCHEMA = {
-  type: 'object',
-  properties: {
-    findings: { type: 'array', items: { type: 'object',
-      properties: { severity: { type: 'string', enum: ['critical','high','medium','low'] },
-                    shard: { type: 'string' }, title: { type: 'string' }, fix: { type: 'string' } },
-      required: ['severity','title','fix'] } } }, required: ['findings']
-}
-
-const VERDICT_SCHEMA = {
-  type: 'object',
-  properties: { real: { type: 'boolean' } },
-  required: ['real']
-}
-
-// ① Scan：发现分片（实际使用时应替换为真实文件列表或用 Explore agent 发现）
+// ① Scan：发现分片（必须通过 args 传入文件列表，或用 Explore agent 发现）
 phase('Scan')
-const shards = args.shards || ['src/auth.ts', 'src/cart.ts', 'src/checkout.ts']
+const shards = args.shards
+if (!shards || shards.length === 0) { log('ERROR: missing required arg "shards" (array of file paths)'); return null }
 
 log(`扫描到 ${shards.length} 个分片: ${shards.join(', ')}`)
 
@@ -44,7 +31,7 @@ const reviewed = await pipeline(
   // 阶段一：Review（每片一个 agent）
   (shard) => agent(`Review ${shard} for bugs, security, and clarity. Read the file.`, {
     label: `review:${shard}`, phase: 'Review',
-    schema: FINDING_SCHEMA
+    schema: SHARDED_FINDING_SCHEMA
   }),
   // 阶段二：Verify（该片每条发现一个验证 agent）
   (review, shard) => {
@@ -52,7 +39,7 @@ const reviewed = await pipeline(
     return parallel((review?.findings ?? []).map(f => () =>
       agent(`Adversarially verify this finding in ${shard}: "${f.title}". Refute if not real.`, {
         label: `verify:${shard}`, phase: 'Verify',
-        schema: VERDICT_SCHEMA
+        schema: SIMPLE_VERDICT_SCHEMA
       })
         .then(v => ({ ...f, shard, real: v && v.real }))
     )).then(rs => rs.filter(Boolean).filter(x => x.real))

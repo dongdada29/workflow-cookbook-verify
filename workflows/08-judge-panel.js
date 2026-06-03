@@ -21,7 +21,7 @@ const CANDIDATES = args.candidates || [
   { id: 'B', desc: 'Solution B: Microservices with event-driven communication' },
 ]
 
-// 评分 schema：每个维度打分（1-5）+ 综合评语
+// 评分 schema：每个候选打分（1-5）+ 综合评语
 const SCORE_SCHEMA = {
   type: 'object',
   properties: {
@@ -43,7 +43,7 @@ const SCORE_SCHEMA = {
   required: ['scores', 'winner', 'reasoning'],
 }
 
-// 评委视角（用下标制造差异，不用 Math.random）
+// 评委视角（用固定视角制造差异，不用 Math.random）
 const JUDGE_PERSPECTIVES = [
   { name: 'Technical', focus: 'architectural soundness, scalability, maintainability' },
   { name: 'Business', focus: 'time-to-market, cost, business alignment' },
@@ -51,7 +51,7 @@ const JUDGE_PERSPECTIVES = [
 ]
 
 phase('Judge')
-// 每个评委独立评估所有候选
+// 每个评委独立评估所有候选，带评委名字方便后续映射
 const judges = await parallel(
   JUDGE_PERSPECTIVES.map((j, i) => () =>
     agent(
@@ -60,42 +60,77 @@ const judges = await parallel(
       `Evaluate these candidates and provide scores (1-5) and a recommendation:\n` +
       CANDIDATES.map(c => `- ${c.id}: ${c.desc}`).join('\n'),
       { label: `judge:${j.name}`, phase: 'Judge', schema: SCORE_SCHEMA }
-    )
+    ).then(r => r ? { ...r, judgeName: j.name } : null)
   )
 )
 
 const validJudges = judges.filter(Boolean)
+if (validJudges.length === 0) {
+  log('all judges failed')
+  return null
+}
 
 phase('Vote')
-// 计票：统计每个候选获得的票数
+
+// 计票维度一：简单多数票（每个评委的 winner 投一票）
 const voteCounts = {}
 CANDIDATES.forEach(c => { voteCounts[c.id] = 0 })
-
 validJudges.forEach(j => {
-  // 简单计票：每个评委的 winner 投一票
-  // 实际应该考虑评分加权，但这里简化处理
   if (voteCounts[j.winner] !== undefined) {
     voteCounts[j.winner]++
   }
 })
 
-// 找出票数最高的候选
+// 计票维度二：加权评分（利用评委给出的 score 做平均）
+const avgScores = {}
+CANDIDATES.forEach(c => {
+  const allScores = validJudges
+    .flatMap(j => j.scores || [])
+    .filter(s => s.candidateId === c.id)
+    .map(s => s.score)
+  avgScores[c.id] = allScores.length > 0
+    ? Math.round((allScores.reduce((a, b) => a + b, 0) / allScores.length) * 10) / 10
+    : 0
+})
+
+// 综合计票：票数相同则用平均分决胜
 let maxVotes = 0
 let winner = null
+let tied = []
 Object.entries(voteCounts).forEach(([id, votes]) => {
   if (votes > maxVotes) {
     maxVotes = votes
     winner = id
+    tied = [id]
+  } else if (votes === maxVotes) {
+    tied.push(id)
   }
 })
 
-const totalJudges = validJudges.length
-const margin = maxVotes / totalJudges
+// 平票处理：用平均分决胜
+if (tied.length > 1) {
+  let bestScore = 0
+  tied.forEach(id => {
+    if (avgScores[id] > bestScore) {
+      bestScore = avgScores[id]
+      winner = id
+    }
+  })
+  log(`平票 ${tied.join(',')}，按平均分决胜: ${JSON.stringify(avgScores)}`)
+}
 
-log(`投票结果: ${JSON.stringify(voteCounts)} | 评委数: ${totalJudges}`)
+const totalJudges = validJudges.length
+const consensusRatio = maxVotes / totalJudges
+
+log(`投票结果: ${JSON.stringify(voteCounts)} | 平均分: ${JSON.stringify(avgScores)} | 评委数: ${totalJudges}`)
 return {
   winner,
   votes: voteCounts,
-  margin: `${maxVotes}/${totalJudges}`,
-  judges: validJudges.map(j => ({ name: j.winner, reasoning: j.reasoning })),
+  avgScores,
+  consensus: `${maxVotes}/${totalJudges} (${Math.round(consensusRatio * 100)}%)`,
+  judges: validJudges.map(j => ({
+    perspective: j.judgeName,
+    voted: j.winner,
+    reasoning: j.reasoning,
+  })),
 }

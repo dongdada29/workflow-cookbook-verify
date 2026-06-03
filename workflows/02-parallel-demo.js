@@ -15,7 +15,7 @@ export const meta = {
 phase('Fan-out')
 const dims = ['naming', 'error-handling', 'comments']
 const results = await parallel(
-  dims.map((d, i) => () =>
+  dims.map((d) => () =>
     agent(`Name one common ${d} code smell in exactly one sentence.`, {
       label: `smell:${d}`,
       schema: { type: 'object', properties: { smell: { type: 'string' } }, required: ['smell'] },

@@ -16,7 +16,11 @@ workflow-cookbook-verify/
 │   ├── 05-gcf-loop.js           # 第 12 章：生成-批评-修复循环
 │   ├── 06-multi-dim-review.js  # 第 11 章：PR 多维 Review
 │   ├── 07-sharded-review.js     # 第 10 章：分片代码审查
-│   └── 08-judge-panel.js        # 第 14 章：评委面板
+│   ├── 08-judge-panel.js        # 第 14 章：评委面板
+│   ├── 09-budget-loop.js        # 第 21 章：动态预算控制
+│   ├── 10-loop-until-dry.js     # 第 18 章：循环到干
+│   ├── 11-nested-workflow.js    # 第 20 章：嵌套 Workflow
+│   └── 12-worktree-isolation.js # 第 19 章：Worktree 隔离
 ├── scripts/                     # 本地测试/验证脚本
 ├── docs/                        # 配方说明文档
 └── README.md
@@ -47,6 +51,10 @@ CLAUDE_CODE_WORKFLOWS=1 claude
 | `06-multi-dim-review` | Ch11 | 多维评审 | parallel 屏障收口 + synthesize |
 | `07-sharded-review` | Ch10 | 分片审查 | pipeline 无屏障 + 全局屏障收口 |
 | `08-judge-panel` | Ch14 | 评委面板 | 多评委投票，计票选优 |
+| `09-budget-loop` | Ch21 | 动态预算 | budget.remaining() 自适应深度 |
+| `10-loop-until-dry` | Ch18 | 循环到干 | 连续空轮停止，去重追踪 |
+| `11-nested-workflow` | Ch20 | 嵌套 Workflow | workflow() 调用子工作流 |
+| `12-worktree-isolation` | Ch19 | Worktree 隔离 | isolation: 'worktree' 防冲突 |
 
 ## 前置条件
 
